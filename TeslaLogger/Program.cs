@@ -37,7 +37,6 @@ namespace TeslaLogger
         {
             CheckNewCredentials();
 
-
             try
             {
                 Tools.SetThread_enUS();
@@ -165,6 +164,11 @@ namespace TeslaLogger
                     DBHelper.CheckForInterruptedCharging(true);
                     wh.UpdateAllEmptyAddresses();
                     DBHelper.UpdateIncompleteTrips();
+                    DBHelper.UpdateAllChargingMaxPower();
+
+                    var sd = new ShareData(wh.TaskerHash);
+                    sd.SendAllChargingData();
+                    sd.SendDegradationData();
                 }).Start();
 
                 DBHelper.currentJSON.current_odometer = DBHelper.getLatestOdometer();
@@ -238,6 +242,7 @@ namespace TeslaLogger
                                                 if (wh.DeleteWakeupFile())
                                                 {
                                                     string wakeup = wh.Wakeup().Result;
+                                                    lastCarUsed = DateTime.Now;
                                                 }
 
                                                 currentState = TeslaState.Start;
@@ -273,7 +278,10 @@ namespace TeslaLogger
                                         if (odometerLastTrip != 0)
                                         {
                                             if (missingOdometer > 5)
+                                            {
                                                 Logfile.Log($"Missing: {missingOdometer} km! - Check: https://teslalogger.de/faq-1.php");
+                                                WriteMissingFile(missingOdometer);
+                                            }
                                             else
                                                 Logfile.Log($"Missing: {missingOdometer} km");
                                         }
@@ -346,9 +354,23 @@ namespace TeslaLogger
 
                                                         for (int x = 0; x < ApplicationSettings.Default.SuspendAPIMinutes * 10; x++)
                                                         {
+                                                            TimeSpan tsSMT = DateTime.Now - DBHelper.currentJSON.lastScanMyTeslaReceived;
+                                                            if (DBHelper.currentJSON.SMTSpeed > 5 && 
+                                                                DBHelper.currentJSON.SMTSpeed < 260 &&
+                                                                DBHelper.currentJSON.SMTBatteryPower > 2 &&
+                                                                tsSMT.TotalMinutes < 5)
+                                                            {
+                                                                Logfile.Log("ScanMyTesla prevents car to get sleep. Speed: " + DBHelper.currentJSON.SMTSpeed);
+                                                                lastCarUsed = DateTime.Now;
+                                                                string wakeup = wh.Wakeup().Result;
+                                                                sleep = false;
+                                                                break;
+                                                            }
+
                                                             if (wh.existsWakeupFile)
                                                             {
                                                                 Logfile.Log("Wakeupfile prevents car to get sleep");
+                                                                lastCarUsed = DateTime.Now;
                                                                 wh.DeleteWakeupFile();
                                                                 string wakeup = wh.Wakeup().Result;
                                                                 sleep = false;
@@ -484,6 +506,9 @@ namespace TeslaLogger
                                     else
                                     {
                                         DriveFinished(wh);
+
+                                        ShareData sd = new ShareData(wh.TaskerHash);
+                                        sd.SendAllChargingData();
                                     }
                                 }
                                 break;
@@ -577,6 +602,19 @@ namespace TeslaLogger
             }
         }
 
+        private static void WriteMissingFile(double missingOdometer)
+        {
+            try
+            {
+                string filepath = System.IO.Path.Combine(FileManager.GetExecutingPath(), "MISSINGKM");
+                System.IO.File.AppendAllText(filepath, DateTime.Now.ToString(Tools.ciDeDE) + " : " + $"Missing: {missingOdometer}km!\r\n");
+
+                UpdateTeslalogger.chmod(filepath, 666, false);
+            }
+            catch (Exception)
+            { }
+        }
+
         private static void DriveFinished(WebHelper wh)
         {
             // finish trip
@@ -644,6 +682,10 @@ namespace TeslaLogger
 
                         wh.Tesla_token = temp;
                         wh.lastTokenRefresh = DateTime.Now;
+
+                        // Every 10 Days send degradataion Data
+                        var sd = new ShareData(wh.TaskerHash);
+                        sd.SendDegradationData();
                     }
                     else
                     {

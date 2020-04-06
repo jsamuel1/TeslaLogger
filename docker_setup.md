@@ -1,4 +1,6 @@
 # Docker Setup (BETA)
+For Synology NAS users, check the hints here: [LINK](docker_setup_synology.md) 
+
 Please make sure you have the latest docker and docker-compse. Many repositories comes with old docker and / or docker-compose. You can avoid a lot of problems by doblecheck it.
 
 These versions are known to work fine:
@@ -56,7 +58,7 @@ docker-compose up
 after a minute or two, everything should be ready.
 
 Try to connect to Grafana with you favorite browser:
-http://localhost:3000 (admin/admin)
+http://localhost:3000 (admin/teslalogger)
 
 Try to connect to Admin-Panel
 http://localhost:8888/admin/
@@ -68,6 +70,7 @@ If there are updates of the subsystem, you have to get the latest docker-compose
 ```
 docker-compose stop
 git fetch
+git reset --hard origin/master
 git checkout origin/master -- docker-compose.yml
 docker-compose build
 docker-compose up

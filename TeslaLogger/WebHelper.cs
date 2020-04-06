@@ -139,6 +139,10 @@ namespace TeslaLogger
                 if (resultContent.Contains("authorization_required"))
                 {
                     Logfile.Log("Wrong Credentials");
+
+                    if (Tools.IsDocker())
+                        System.Threading.Thread.Sleep(5 * 60000);
+
                     throw new Exception("Wrong Credentials");
                 }
 
@@ -532,7 +536,22 @@ namespace TeslaLogger
         {
             string eff = "0.190052356";
             string car = "";
-            if (carSettings.car_type == "models2" && carSettings.car_special_type == "base")
+
+            if (carSettings.car_type == "model3")
+            {
+                int maxRange = DBHelper.GetAvgMaxRage();
+                if (maxRange > 400)
+                {
+                    WriteCarSettings("0.152", "M3 LR");
+                    return;
+                }
+                else
+                {
+                    WriteCarSettings("0.137", "M3 SR+");
+                    return;
+                }
+            }
+            else if (carSettings.car_type == "models2" && carSettings.car_special_type == "base")
             {
                 if (carSettings.trim_badging == "60")
                 {
@@ -551,12 +570,22 @@ namespace TeslaLogger
                 }
                 else if (carSettings.trim_badging == "75")
                 {
-                    WriteCarSettings("0.185", "S 75");
+                    WriteCarSettings("0.195", "S 75");
                     return;
                 }
                 else if (carSettings.trim_badging == "90d")
                 {
                     WriteCarSettings("0.188", "S 90D");
+                    return;
+                }
+                else if (carSettings.trim_badging == "p90")
+                {
+                    WriteCarSettings("0.201", "S P90");
+                    return;
+                }
+                else if (carSettings.trim_badging == "p90d")
+                {
+                    WriteCarSettings("0.201", "S P90D");
                     return;
                 }
                 else if (carSettings.trim_badging == "100d")
@@ -567,6 +596,11 @@ namespace TeslaLogger
                 else if (carSettings.trim_badging == "p100d")
                 {
                     WriteCarSettings("0.200", "S 100D");
+                    return;
+                }
+                else if (carSettings.trim_badging == "")
+                {
+                    WriteCarSettings("0.169", "S Raven");
                     return;
                 }
                 else
@@ -617,9 +651,24 @@ namespace TeslaLogger
                     WriteCarSettings("0.201", "S 85");
                     return;
                 }
+                else if (carSettings.trim_badging == "90")
+                {
+                    WriteCarSettings("0.201", "S 90");
+                    return;
+                }
                 else if (carSettings.trim_badging == "90d")
                 {
                     WriteCarSettings("0.187", "S 90D");
+                    return;
+                }
+                else if (carSettings.trim_badging == "p90")
+                {
+                    WriteCarSettings("0.201", "S P90");
+                    return;
+                }
+                else if (carSettings.trim_badging == "p90d")
+                {
+                    WriteCarSettings("0.202", "S P90D");
                     return;
                 }
                 else
@@ -662,6 +711,8 @@ namespace TeslaLogger
                 }
             }
 
+            return;
+            /*
             if (carSettings.Model == "MS")
             {
                 if (carSettings.Battery == "BTX5")
@@ -837,6 +888,7 @@ namespace TeslaLogger
             }
 
             WriteCarSettings(eff, car);
+            */
         }
 
         private void WriteCarSettings(string eff, string car)
@@ -1137,6 +1189,8 @@ namespace TeslaLogger
 
                 Tools.SetThread_enUS();
 
+                System.Threading.Thread.Sleep(5000); // Sleep to not get banned by Nominatim
+
                 WebClient webClient = new WebClient();
 
                 webClient.Headers.Add("User-Agent: TL 1.1");
@@ -1411,7 +1465,13 @@ FROM
 
                             Address a = geofence.GetPOI(lat, lng, false);
                             if (a == null)
+                            {
+                                if (dr[3] == DBNull.Value || dr[3].ToString().Length == 0)
+                                {
+                                    DBHelper.UpdateAddress(id);
+                                }
                                 continue;
+                            }
 
                             if (dr[3] == DBNull.Value || a.name != dr[3].ToString())
                             {
@@ -1863,6 +1923,7 @@ FROM
                 d.Add("SMT", Tools.UseScanMyTesla() ? "1" : "0");
                 d.Add("SMTs", DBHelper.GetScanMyTeslaSignalsLastWeek().ToString());
                 d.Add("SMTp", DBHelper.GetScanMyTeslaPacketsLastWeek().ToString());
+                d.Add("TR", DBHelper.GetAvgMaxRage().ToString());
 
                 d.Add("OS", Environment.OSVersion.ToString());
 

@@ -17,6 +17,7 @@ require("language.php");
 	<script>
 	
 	var nextGetWeather = 0;
+	var loc;
 
 	$( function() {
 	<?php
@@ -38,6 +39,8 @@ require("language.php");
 		
 		echo("$('#display_name').text('$display_name');");
 	?>
+		if (navigator.languages != undefined) loc = navigator.languages[0]; 
+			else loc = navigator.language;
 
 		GetCurrentData();
 		
@@ -98,6 +101,14 @@ require("language.php");
 				$('#car_statusLabel').text("Status:");
 				$('#car_status').text("Offline");
 			}
+
+<!-- Begin of my_dashboard_jsonData.php -->
+<?PHP
+if (file_exists("my_dashboard_jsonData.php"))
+	include("my_dashboard_jsonData.php");
+?>
+<!-- End of my_dashboard_jsonData.php -->
+
 		});
 	}
 
@@ -112,7 +123,9 @@ require("language.php");
 		currentMinutes = ( currentMinutes < 10 ? "0" : "" ) + currentMinutes;
 		var currentTimeString = currentHours + ":" + currentMinutes;
 		
-		$('#clock').text(currentTimeString);
+		$('#clock').text(currentTimeString);			
+		$('#weekday').text(currentTime.toLocaleString(loc, { weekday: 'long'}));
+		$('#date').text(currentTime.toLocaleString(loc, { month: 'long', day: 'numeric' }));
 	}
 	
 	function updateBat($percent)
@@ -280,10 +293,25 @@ require("language.php");
 	  <div id="car_status">-</div>
 	  <div id="error">No wallpapers found in \\raspberry\teslalogger-web\admin\wallpapers</div>
   </div>
-  <div id="clock">00:00</div>
+
+	<div id="calendar">
+		<span id="weekday"></span><br>
+		<span id="date"></span><br>
+		<span id="clock">00:00</span>
+	</div>
+
   <div id="weather">
 	<img id="weather_icon" src="">
 	<div id="temp">no weather data</div>
   </div>
+
+<!-- Begin of my_dashboard.php -->
+
+<?PHP
+if (file_exists("my_dashboard.php"))
+	include("my_dashboard.php");
+?>
+
+<!-- End of my_dashboard.php -->
   </body>
 </html>

@@ -20,9 +20,13 @@ require("language.php");
 	var map = null;
 	var marker = null;
 	var mapInit = false;
+	var loc;
+	var LengthUnit = "<?php echo($LengthUnit); ?>";
+	var TemperatureUnit = "<?php echo($TemperatureUnit); ?>";
+	var PowerUnit = "<?php echo($PowerUnit); ?>";
 
   $( function() {
-    $( "button" ).button();
+    $("button").button();
 	GetCurrentData();
 
 	map = new L.Map('map');
@@ -49,6 +53,9 @@ require("language.php");
 
 	var greenIcon = L.icon({iconUrl: 'img/marker-icon-green.png', shadowUrl: 'https://unpkg.com/leaflet@1.4.0/dist/images/marker-shadow.png', iconAnchor:   [12, 40], popupAnchor:  [0, -25]});
 
+	if (navigator.languages != undefined) loc = navigator.languages[0]; 
+			else loc = navigator.language;
+
 	setInterval(function()
 		{
 			if ( document.hasFocus() )
@@ -57,6 +64,8 @@ require("language.php");
 			}
 		}
 		,5000);
+
+	ShowInfo();
   } );
 
 	function GetCurrentData()
@@ -65,22 +74,46 @@ require("language.php");
 		  url: "current_json.php",
 		  dataType: "json"
 		  }).done(function( jsonData ) {
-			$('#ideal_battery_range_km').text(jsonData["ideal_battery_range_km"].toFixed(1));
-			$('#odometer').text(jsonData["odometer"].toFixed(1));
+			if (LengthUnit == "mile")
+			{
+				$('#ideal_battery_range_km').text((jsonData["ideal_battery_range_km"] / 1.609).toFixed(1) + " mi");
+				$('#odometer').text((jsonData["odometer"] / 1.609).toFixed(1) + " mi");
+			}
+			else
+			{
+				$('#ideal_battery_range_km').text(jsonData["ideal_battery_range_km"].toFixed(1) + " km");
+				$('#odometer').text(jsonData["odometer"].toFixed(1) + " km");
+			}
+
 			$('#battery_level').text(jsonData["battery_level"]);
-      var car_version = jsonData["car_version"];
-      car_version = car_version.substring(0,car_version.lastIndexOf(" "));
-      $('#car_version').text(car_version);
+			var car_version = jsonData["car_version"];
+			car_version = car_version.substring(0,car_version.lastIndexOf(" "));
+			$('#car_version').text(car_version);
 
 			if (jsonData["charging"])
 			{
 				$('#car_statusLabel').text("Wird geladen:");
 				$('#car_status').html(jsonData["charger_power"] + " kW / +" + jsonData["charge_energy_added"] + " kWh<br>" + jsonData["charger_voltage"]+"V / " + jsonData["charger_actual_current"]+"A / "+ jsonData["charger_phases"]+"P");
+
+				updateSMT(jsonData);
 			}
 			else if (jsonData["driving"])
 			{
 				$('#car_statusLabel').text("Fahren:");
-				$('#car_status').text(jsonData["speed"] + " km/h / " + jsonData["power"]+"PS");
+				var str = "";
+				if (LengthUnit == "mile")
+					str = (jsonData["speed"]/ 1.609).toFixed(0) + " mph / "
+				else
+					str = jsonData["speed"] + " km/h / ";
+
+				if (PowerUnit == "kw")
+					str += (jsonData["power"] / 1.35962).toFixed(0) +"kW";
+				else
+					str += jsonData["power"]+"PS";
+
+				$('#car_status').text(str);
+
+				updateSMT(jsonData);
 			}
 			else if (jsonData["online"])
 			{
@@ -97,16 +130,22 @@ require("language.php");
 
 				$('#car_statusLabel').text("Status:");
 				$('#car_status').html(text);
+
+				updateSMT(jsonData);
 			}
 			else if (jsonData["sleeping"])
 			{
 				$('#car_statusLabel').text("Status:");
-				$('#car_status').text("Schlafen");
+				$('#car_status').text("<?php t("Schlafen"); ?>");
+
+				hideSMT();
 			}
 			else
 			{
 				$('#car_statusLabel').text("Status:");
 				$('#car_status').text("Offline");
+
+				hideSMT();
 			}
 
 			$("#trip_start").text(jsonData["trip_start"]);
@@ -115,7 +154,9 @@ require("language.php");
 			$("#trip_kwh").text(Math.round(jsonData["trip_kwh"] *10)/10);
 			$("#trip_avg_kwh").text(Math.round(jsonData["trip_avg_kwh"] *10)/10);
 			$("#trip_distance").text(Math.round(jsonData["trip_distance"]*10)/10);
-			$("#last_update").text(jsonData["ts"]);
+			
+			var ts = new Date(Date.parse(jsonData["ts"]));
+			$("#last_update").text(ts.toLocaleString(loc));
 
 			var trip_duration_sec = jsonData["trip_duration_sec"];
 			var min = Math.floor(trip_duration_sec / 60);
@@ -143,6 +184,59 @@ require("language.php");
 		});
 	}
 
+	function hideSMT()
+	{
+		$('#CellTempRow').hide();
+		$('#BMSMaxChargeRow').hide();
+		$('#BMSMaxDischargeRow').hide();
+		$('#CellImbalanceRow').hide();
+	}
+
+	function updateSMT(jsonData)
+	{
+		if (jsonData["SMTCellTempAvg"])
+		{
+			$('#CellTempRow').show();
+			$('#CellTemp').text(Math.round(jsonData["SMTCellTempAvg"] * 10)/10 + "°C");
+		}
+		else
+		{
+			$('#CellTempRow').hide();
+		}
+
+		if (jsonData["SMTBMSmaxCharge"])
+		{
+			$('#BMSMaxChargeRow').show();
+			$('#BMSMaxCharge').text( Math.round(jsonData["SMTBMSmaxCharge"]) +" kW");
+		}
+		else
+		{
+			$('#BMSMaxChargeRow').hide();
+		}
+
+		if (jsonData["SMTBMSmaxDischarge"])
+		{
+			$('#BMSMaxDischargeRow').show();
+			$('#BMSMaxDischarge').text( Math.round(jsonData["SMTBMSmaxDischarge"]) +" kW");
+		}
+		else
+		{
+			$('#BMSMaxDischargeRow').hide();
+		}
+
+		if (jsonData["SMTCellMaxV"] && jsonData["SMTCellMinV"])
+		{
+			var CellImbalance = Math.round((jsonData["SMTCellMaxV"] - jsonData["SMTCellMinV"]) * 1000);
+			$('#CellImbalanceRow').show();
+			$('#CellImbalance').text( CellImbalance +" mV");
+		}
+		else
+		{
+			$('#CellImbalanceRow').hide();
+		}
+
+	}
+
   function BackgroudRun($target, $text)
   {
 	  $.ajax($target, {
@@ -159,6 +253,22 @@ require("language.php");
 		}
 	);
   }
+  
+function ShowInfo()
+{
+	
+	<?php
+	if (!file_exists("/etc/teslalogger/sharedata.txt") && !file_exists("/etc/teslalogger/nosharedata.txt"))
+	{?>
+		$("#InfoText").html("<?php t("TextShare"); ?>");
+		$(".HeaderT").show();
+		$("#PositiveButton").click(function(){window.location.href='settings_share.php?a=yes';});
+		$("#NegativeButton").click(function(){window.location.href='settings_share.php?a=no';});
+	<?php
+	}
+	?>
+	
+}
   </script>
   </head>
   <body style="padding-top: 5px; padding-left: 10px;">
@@ -172,20 +282,32 @@ require("language.php");
   <button style="width:120px;" onclick="window.location.href='settings.php';">Settings</button>
   <br />
   <br />
+
   <div id="content" style="max-width:1036px;">
+  <div id="info">
+  <table class="HeaderT">
+	  <thead><td colspan="2" class="HeaderStyle"><?php t("Info"); ?></td></thead>
+	  <tr><td colspan="2"><span id="InfoText"></span></td></tr>
+	  <tr><td></td><td style="float:right;"><button id="NegativeButton"><?php t("Nein"); ?></button> <button id="PositiveButton"><?php t("Ja"); ?></button></td></tr>
+    </table>
+  </div>
   <div style="float:left;">
-	  <table class="b1">
-	  <thead style="background-color:#d0d0d0; color:#000000;"><td colspan="2" style="font-weight:bold;"><?php t("Fahrzeuginfo"); ?></td></thead>
+	  <table class="b1 THeader">
+	  <thead><td colspan="2" class="HeaderL HeaderStyle"><?php t("Fahrzeuginfo"); ?></td></thead>
 	  <tr><td width="130px"><b><span id="car_statusLabel"></span></b></td><td width="180px"><span id="car_status"></span></td></tr>
-	  <tr><td><b><?php t("Typical Range"); ?>:</b></td><td><span id="ideal_battery_range_km">---</span> km / <span id="battery_level">---</span> %</td></tr>
-	  <tr><td><b><?php t("KM Stand"); ?>:</b></td><td><span id="odometer">---</span> km</td></tr>
+	  <tr id='CellTempRow'><td><b><?php t("Cell Temp"); ?>:</b></td><td><span id="CellTemp"></span></td></tr>
+	  <tr id='BMSMaxChargeRow'><td><b><?php t("Max Charge"); ?>:</b></td><td><span id="BMSMaxCharge"></span></td></tr>
+	  <tr id='BMSMaxDischargeRow'><td><b><?php t("Max Discharge"); ?>:</b></td><td><span id="BMSMaxDischarge"></span></td></tr>
+	  <tr id='CellImbalanceRow'><td><b><?php t("Cell Imbalance"); ?>:</b></td><td><span id="CellImbalance"></span></td></tr>
+	  <tr><td><b><?php t("Typical Range"); ?>:</b></td><td><span id="ideal_battery_range_km">---</span> / <span id="battery_level">---</span> %</td></tr>
+	  <tr><td><b><?php t("KM Stand"); ?>:</b></td><td><span id="odometer">---</span></td></tr>
 	  <tr><td><b><?php t("Car Version"); ?>:</b></td><td><span id="car_version">---</span></td></tr>
 	  <tr><td><b><?php t("Last Update"); ?>:</b></td><td><span id="last_update">---</span></td></tr>
 	  <tr><td><b>Teslalogger:</b></td><td><?php checkForUpdates();?></td></tr>
     </table>
 
-	  <table style="float:left;">
-	  <thead style="background-color:#d0d0d0; color:#000000;"><td colspan="2" style="font-weight:bold;"><?php t("Letzter Trip"); ?></td></thead>
+	  <table style="float:left;" class="THeader">
+	  <thead><td colspan="2" class="HeaderL HeaderStyle"><?php t("Letzter Trip"); ?></td></thead>
 	  <tr><td width="130px"><b>Start:</b></td><td width="180px"><span id="trip_start"></span></td></tr>
 	  <tr><td><b><?php t("Dauer"); ?>:</b></td><td><span id="trip_duration_sec">---</span> min</td></tr>
 	  <tr><td><b><?php t("Distanz"); ?>:</b></td><td><span id="trip_distance">---</span> km</td></tr>
@@ -229,7 +351,6 @@ function getTeslaloggerVersion($path)
 	preg_match('/AssemblyVersion\(\"([0-9\.]+)\"/',$f, $matches);
 	return $matches[1];
 }
-
 ?>
 
   <?PHP
