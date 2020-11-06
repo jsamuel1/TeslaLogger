@@ -1,6 +1,20 @@
 ﻿<!DOCTYPE html>
 <?php
 require("language.php");
+require("tools.php");
+session_start();
+global $display_name;
+$carid = 1;
+if (isset($_REQUEST["carid"]))
+{
+	$_SESSION["carid"] = $_REQUEST["carid"];
+	$carid = $_REQUEST["carid"];
+}
+else
+{
+	$_SESSION["carid"] = $carid;
+}
+
 ?>
 <html lang="<?php echo $json_data["Language"]; ?>">
   <head>
@@ -8,12 +22,14 @@ require("language.php");
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="apple-mobile-web-app-title" content="Teslalogger Config">
     <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-    <title>Teslalogger Config V1.9</title>
+    <title>Teslalogger</title>
 	<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css">
 	<link rel="stylesheet" href="https://teslalogger.de/teslalogger_style.css">
 	<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
 	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+	<script src="https://code.jquery.com/jquery-migrate-1.4.1.min.js"></script>
 	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.4.0/dist/leaflet.css" integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA==" crossorigin=""/>
+	<link rel='stylesheet' id='genericons-css'  href='https://www.impala64.de/blog/tesla/wp-content/themes/twentyfourteen/genericons/genericons.css?ver=3.0.3' type='text/css' media='all' />
    <!-- Make sure you put this AFTER Leaflet's CSS -->
 	<script src="https://unpkg.com/leaflet@1.4.0/dist/leaflet.js" integrity="sha512-QVftwZFqvtRNi0ZyCtsznlKSWOStnDORoefr1enyq5mVL4tmKB3S/EnC3rRJcxCPavG10IcrVGSmPh6Qw5lwrg==" crossorigin=""></script>
 	<script>
@@ -25,8 +41,13 @@ require("language.php");
 	var TemperatureUnit = "<?php echo($TemperatureUnit); ?>";
 	var PowerUnit = "<?php echo($PowerUnit); ?>";
 
+	var perfEntries = performance.getEntriesByType("navigation");
+	if (perfEntries && perfEntries.length > 0 && perfEntries[0].type === "back_forward") {
+		location.reload(true);
+	}
+
   $( function() {
-    $("button").button();
+    // $("button").button();
 	GetCurrentData();
 
 	map = new L.Map('map');
@@ -92,8 +113,19 @@ require("language.php");
 
 			if (jsonData["charging"])
 			{
+				var ttfc = jsonData["time_to_full_charge"];
+				var hour = parseInt(ttfc);
+				var minute = Math.round((ttfc - hour) *60);
+				var at = new Date();
+				at.setMinutes(at.getMinutes() + minute);
+				at.setHours(at.getHours() + hour);
+
+				var datetime = at.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+
 				$('#car_statusLabel').text("Wird geladen:");
-				$('#car_status').html(jsonData["charger_power"] + " kW / +" + jsonData["charge_energy_added"] + " kWh<br>" + jsonData["charger_voltage"]+"V / " + jsonData["charger_actual_current"]+"A / "+ jsonData["charger_phases"]+"P");
+				$('#car_status').html(jsonData["charger_power"] + " kW / +" + jsonData["charge_energy_added"] + " kWh<br>" + 
+				jsonData["charger_voltage"]+"V / " + jsonData["charger_actual_current"]+"A / "+ 
+				jsonData["charger_phases"]+"P<br>Done: "+ hour +"h "+minute+"m <br>At: " + datetime +  " / " + jsonData["charge_limit_soc"] +"%");
 
 				updateSMT(jsonData);
 			}
@@ -115,7 +147,7 @@ require("language.php");
 
 				updateSMT(jsonData);
 			}
-			else if (jsonData["online"])
+			else if (jsonData["online"] && !jsonData["falling_asleep"])
 			{
 				var text = "Online";
 
@@ -140,6 +172,13 @@ require("language.php");
 
 				hideSMT();
 			}
+			else if (jsonData["falling_asleep"])
+			{
+				$('#car_statusLabel').text("Status:");
+				$('#car_status').text("<?php t("Einschlafen"); ?>");
+
+				hideSMT();
+			}
 			else
 			{
 				$('#car_statusLabel').text("Status:");
@@ -148,12 +187,40 @@ require("language.php");
 				hideSMT();
 			}
 
-			$("#trip_start").text(jsonData["trip_start"]);
-			$("#max_speed").text(jsonData["trip_max_speed"]);
-			$("#max_power").text(jsonData["trip_max_power"]);
+			if (LengthUnit == "mile")
+			{
+				$("#max_speed").text((jsonData["trip_max_speed"]/ 1.609).toFixed(0));
+				$("#lt_kmh").text("mph");
+
+				$("#trip_avg_kwh").text(Math.round(jsonData["trip_avg_kwh"]* 1.609*10)/10);
+				$("#lt_whkm").text("wh/mi");
+
+				$("#trip_distance").text(Math.round(jsonData["trip_distance"]/ 1.609 *10)/10);
+				$("#lt_trip_distance_km").text("mi");
+			}
+			else
+			{
+				$("#max_speed").text(jsonData["trip_max_speed"]);
+				
+				$("#trip_avg_kwh").text(Math.round(jsonData["trip_avg_kwh"] *10)/10);
+				$("#trip_distance").text(Math.round(jsonData["trip_distance"]*10)/10);
+			}
+
+			if (PowerUnit == "kw")
+			{
+				$("#max_power").text((jsonData["trip_max_power"] / 1.35962).toFixed(0)); 				
+				$("#lt_trip_PS").text("<?php t("kW"); ?>");
+			}
+			else
+			{
+				$("#max_power").text(jsonData["trip_max_power"]);
+				$("#lt_trip_PS").text("<?php t("PS"); ?>");
+			}
+
+			var ts2 = new Date(Date.parse(jsonData["trip_start_dt"]));
+			$("#trip_start").text(ts2.toLocaleString(loc));
+
 			$("#trip_kwh").text(Math.round(jsonData["trip_kwh"] *10)/10);
-			$("#trip_avg_kwh").text(Math.round(jsonData["trip_avg_kwh"] *10)/10);
-			$("#trip_distance").text(Math.round(jsonData["trip_distance"]*10)/10);
 			
 			var ts = new Date(Date.parse(jsonData["ts"]));
 			$("#last_update").text(ts.toLocaleString(loc));
@@ -170,7 +237,7 @@ require("language.php");
 
 			if (!mapInit)
 			{
-				map.setView(p,13);
+				map.setView(p, <?php echo getZoomLevel(); ?>);
 				mapInit = true;
 			}
 			else
@@ -224,11 +291,10 @@ require("language.php");
 			$('#BMSMaxDischargeRow').hide();
 		}
 
-		if (jsonData["SMTCellMaxV"] && jsonData["SMTCellMinV"])
+		if (jsonData["SMTCellImbalance"])
 		{
-			var CellImbalance = Math.round((jsonData["SMTCellMaxV"] - jsonData["SMTCellMinV"]) * 1000);
 			$('#CellImbalanceRow').show();
-			$('#CellImbalance').text( CellImbalance +" mV");
+			$('#CellImbalance').text(Math.round(jsonData["SMTCellImbalance"]) +" mV");
 		}
 		else
 		{
@@ -236,29 +302,28 @@ require("language.php");
 		}
 
 	}
-
-  function BackgroudRun($target, $text)
-  {
-	  $.ajax($target, {
-		data: {
-			id: ''
-		}
-		})
-		.then(
-		function success(name) {
-			alert($text);
-		},
-		function fail(data, status) {
-			alert($text);
-		}
-	);
-  }
   
 function ShowInfo()
-{
-	
+{	
+	<?php	
+	$prefix = "/etc/teslalogger/";
+    if (isDocker())
+		$prefix = "/tmp/";
+		
+	if (file_exists($prefix."cmd_gosleep_$carid.txt"))
+	{?>
+		$("#InfoText").html("<h1><?php t("TextSuspendTeslalogger"); ?></h1>");
+		$(".HeaderT").show();
+		$("#PositiveButton").text("<?php t("Resume Teslalogger"); ?>");
+		$("#PositiveButton").click(function(){window.location.href='/wakeup.php?id=' + <?= $carid ?>;});
+		$("#NegativeButton").hide();
 	<?php
-	if (!file_exists("/etc/teslalogger/sharedata.txt") && !file_exists("/etc/teslalogger/nosharedata.txt"))
+	}
+	else if (!file_exists("/etc/teslalogger/sharedata.txt") && 
+	!file_exists("/etc/teslalogger/nosharedata.txt") &&
+	!file_exists("/tmp/sharedata.txt") && 
+	!file_exists("/tmp/nosharedata.txt")
+	)
 	{?>
 		$("#InfoText").html("<?php t("TextShare"); ?>");
 		$(".HeaderT").show();
@@ -270,18 +335,13 @@ function ShowInfo()
 	
 }
   </script>
+
   </head>
   <body style="padding-top: 5px; padding-left: 10px;">
-  <button style="width:120px;" onclick="window.location.href='logfile.php';">Logfile</button>
-  <button style="width:120px;" onclick="BackgroudRun('restartlogger.php', 'Reboot!');">Restart</button>
-  <button style="width:120px;" onclick="BackgroudRun('update.php', 'Reboot!');">Update</button>
-  <button style="width:120px;" onclick="window.location.href='backup.php';">Backup</button>
-  <button style="width:120px;" onclick="window.location.href='geofencing.php';">Geofence</button>
-  <button style="width:120px;" onclick="BackgroudRun('/wakeup.php', 'Wakeup!');">Wakeup</button>
-  <button style="width:120px;" onclick="BackgroudRun('gosleep.php', 'Sleep!');">Sleep</button>
-  <button style="width:120px;" onclick="window.location.href='settings.php';">Settings</button>
-  <br />
-  <br />
+  <?php 
+    include "menu.php";
+    echo(menu("Teslalogger"));
+?>
 
   <div id="content" style="max-width:1036px;">
   <div id="info">
@@ -293,7 +353,7 @@ function ShowInfo()
   </div>
   <div style="float:left;">
 	  <table class="b1 THeader">
-	  <thead><td colspan="2" class="HeaderL HeaderStyle"><?php t("Fahrzeuginfo"); ?></td></thead>
+	  <thead><td colspan="2" class="HeaderL HeaderStyle"><?php t("Fahrzeuginfo"); ?> <span id="displayname">- <?= $display_name ?></span></td></thead>
 	  <tr><td width="130px"><b><span id="car_statusLabel"></span></b></td><td width="180px"><span id="car_status"></span></td></tr>
 	  <tr id='CellTempRow'><td><b><?php t("Cell Temp"); ?>:</b></td><td><span id="CellTemp"></span></td></tr>
 	  <tr id='BMSMaxChargeRow'><td><b><?php t("Max Charge"); ?>:</b></td><td><span id="BMSMaxCharge"></span></td></tr>
@@ -310,16 +370,16 @@ function ShowInfo()
 	  <thead><td colspan="2" class="HeaderL HeaderStyle"><?php t("Letzter Trip"); ?></td></thead>
 	  <tr><td width="130px"><b>Start:</b></td><td width="180px"><span id="trip_start"></span></td></tr>
 	  <tr><td><b><?php t("Dauer"); ?>:</b></td><td><span id="trip_duration_sec">---</span> min</td></tr>
-	  <tr><td><b><?php t("Distanz"); ?>:</b></td><td><span id="trip_distance">---</span> km</td></tr>
+	  <tr><td><b><?php t("Distanz"); ?>:</b></td><td><span id="trip_distance">---</span> <span id="lt_trip_distance_km">km</span></td></tr>
 	  <tr><td><b><?php t("Verbrauch"); ?>:</b></td><td><span id="trip_kwh">---</span> kWh</td></tr>
-	  <tr><td><b><?php t("Ø Verbrauch"); ?>:</b></td><td><span id="trip_avg_kwh">---</span> Wh/km</td></tr>
-	  <tr><td><b><?php t("Max km/h"); ?> / <?php t("PS"); ?>:</b></td><td><span id="max_speed">---</span> km/h / <span id="max_power">---</span> PS</td></tr>
+	  <tr><td><b><?php t("Ø Verbrauch"); ?>:</b></td><td><span id="trip_avg_kwh">---</span> <span id="lt_whkm">Wh/km</span></td></tr>
+	  <tr><td><b><?php t("Max km/h"); ?> / <?php t("PS"); ?>:</b></td><td><span id="max_speed">---</span> <span id="lt_kmh">km/h</span> / <span id="max_power">---</span> <span id="lt_trip_PS"><span></td></tr>
 	  </table>
   </div>
 
   <table style="float:left;">
   <thead style="background-color:#d0d0d0; color:#000000;"><td colspan="2" style="font-weight:bold;"><?php t("Current Pos"); ?></td></thead>
-  <tr><td width="680px"><div id="map" style="height: 400px;" /></td></tr>
+  <tr><td width="680px"><div id="map" style="height: 400px; z-index:0;" /></td></tr>
   </table>
 
   <?php
@@ -350,6 +410,18 @@ function getTeslaloggerVersion($path)
 	$f = file_get_contents($path);
 	preg_match('/AssemblyVersion\(\"([0-9\.]+)\"/',$f, $matches);
 	return $matches[1];
+}
+function getZoomLevel()
+{
+	if (file_exists("/etc/teslalogger/settings.json"))
+	{
+		$content = file_get_contents("/etc/teslalogger/settings.json");
+		$j = json_decode($content);
+		if (!empty($j->{"ZoomLevel"})) 
+			return $j->{"ZoomLevel"};	
+	}
+	
+	return 15;
 }
 ?>
 

@@ -1,10 +1,10 @@
-﻿namespace TeslaLogger
-{
-    using System;
-    using System.Collections.Generic;
-    using System.IO;
-    using System.Text;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
 
+namespace TeslaLogger
+{
     internal enum TLFilename
     {
         CarSettings,
@@ -30,7 +30,7 @@
     internal class FileManager
     {
         private static readonly Dictionary<TLFilename, string> Filenames;
-        static string _ExecutingPath = null;
+        private static string _ExecutingPath = null;
         static FileManager()
         {
             Filenames = new Dictionary<TLFilename, string>()
@@ -39,8 +39,8 @@
                 { TLFilename.TeslaTokenFilename,        "tesla_token.txt"},
                 { TLFilename.SettingsFilename,          "settings.json"},
                 { TLFilename.CurrentJsonFilename,       "current_json.txt"},
-                { TLFilename.WakeupFilename,            "wakeupteslalogger.txt"},
-                { TLFilename.CmdGoSleepFilename,        "cmd_gosleep.txt"},
+                { TLFilename.WakeupFilename,            "wakeupteslalogger_ID.txt"},
+                { TLFilename.CmdGoSleepFilename,        "cmd_gosleep_ID.txt"},
                 { TLFilename.GeofenceFilename,          "geofence.csv"},
                 { TLFilename.GeofencePrivateFilename,   "geofence-private.csv"},
                 { TLFilename.GeofenceRacingFilename,    "geofence-racing.csv"},
@@ -55,15 +55,61 @@
             return Path.Combine(GetExecutingPath(), Filenames[filename]);
         }
 
-        internal static bool CheckCmdGoSleepFile()
+        internal static string GetFilePath(string filename)
         {
-            if (File.Exists(GetFilePath(TLFilename.CmdGoSleepFilename)))
+            return Path.Combine(GetExecutingPath(), filename);
+        }
+
+        internal static bool CheckCmdGoSleepFile(int carid)
+        {
+
+            if (File.Exists(GetGoSleepPath(carid)))
             {
-                File.Delete(GetFilePath(TLFilename.CmdGoSleepFilename));
+                File.Delete(GetGoSleepPath(carid));
                 return true;
             }
-
             return false;
+        }
+
+        public static string GetSetCostPath
+        {
+            get
+            {
+                if (Tools.IsDocker())
+                {
+                    return Path.Combine("/tmp/", "SetCost.txt");
+                }
+                else
+                {
+                    return Path.Combine(GetExecutingPath(), "SetCost.txt");
+                }
+            }
+        }
+
+        private static string GetGoSleepPath(int carid)
+        {
+            String filename = Filenames[TLFilename.CmdGoSleepFilename];
+            filename = filename.Replace("ID", carid.ToString());
+
+            if (Tools.IsDocker())
+            {
+                return Path.Combine("/tmp/", filename);
+            }
+            else
+            {
+                return GetFilePath(filename);
+            }
+        }
+
+        internal static string GetWakeupTeslaloggerPath(int carid)
+        {
+            string filename = Filenames[TLFilename.WakeupFilename];
+            filename = filename.Replace("ID", carid.ToString());
+
+            if (Tools.IsDocker())
+                return Path.Combine("/tmp/", filename);
+            else
+                return GetFilePath(filename);
         }
 
         internal static string GetTeslaTokenFileContent()
@@ -72,9 +118,11 @@
 
             try
             {
-                var path = GetFilePath(TLFilename.TeslaTokenFilename);
+                string path = GetFilePath(TLFilename.TeslaTokenFilename);
                 if (path != string.Empty)
+                {
                     filecontent = File.ReadAllText(path);
+                }
             }
             catch (FileNotFoundException)
             {
@@ -90,28 +138,24 @@
             return filecontent;
         }
 
-        internal static void WriteTeslaTokenFile(string tesla_token)
-        {
-            string serializeToken = tesla_token + "|" + DateTime.Now.ToString("s");
+        private static object SyncLock_WriteCurrentJsonFile = new object();
 
-            File.WriteAllText(GetFilePath(TLFilename.TeslaTokenFilename), serializeToken);
-        }
-
-        static object SyncLock_WriteCurrentJsonFile = new object();
-
-        internal static void WriteCurrentJsonFile(string current_json)
+        internal static void WriteCurrentJsonFile(int CarID, string current_json)
         {
             lock (SyncLock_WriteCurrentJsonFile)
             {
-                File.WriteAllText(GetFilePath(TLFilename.CurrentJsonFilename), current_json, Encoding.UTF8);
+                string filepath = Path.Combine(GetExecutingPath(), $"current_json_{CarID}.txt");
+                File.WriteAllText(filepath, current_json, Encoding.UTF8);
             }
         }
 
         internal static string GetSRTMDataPath()
         {
-            var path = System.IO.Path.Combine(FileManager.GetExecutingPath(), "SRTM-Data");
+            string path = Path.Combine(GetExecutingPath(), "SRTM-Data");
             if (!Directory.Exists(path))
+            {
                 Directory.CreateDirectory(path);
+            }
 
             return path;
         }
@@ -127,12 +171,13 @@
             if (_ExecutingPath == null)
             {
 
-                var executingAssembly = System.Reflection.Assembly.GetExecutingAssembly();
+                System.Reflection.Assembly executingAssembly = System.Reflection.Assembly.GetExecutingAssembly();
 
-                var executingPath = executingAssembly.Location;
+                string executingPath = executingAssembly.Location;
 
-                executingPath = executingPath.Replace(executingAssembly.ManifestModule.Name, String.Empty);
-                
+                executingPath = executingPath.Replace(executingAssembly.ManifestModule.Name, string.Empty);
+                executingPath = executingPath.Replace("UnitTestsTeslalogger", "TeslaLogger");
+
                 _ExecutingPath = executingPath;
             }
 

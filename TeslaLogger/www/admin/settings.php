@@ -1,6 +1,7 @@
 ﻿<!DOCTYPE html>
 <?php
 require("language.php");
+require("tools.php");
 ?>
 <html lang="<?php echo $json_data["Language"]; ?>">
   <head>
@@ -12,11 +13,12 @@ require("language.php");
 	<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
 	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 	<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/timepicker/1.3.5/jquery.timepicker.min.css">
+	<link rel='stylesheet' id='genericons-css'  href='https://www.impala64.de/blog/tesla/wp-content/themes/twentyfourteen/genericons/genericons.css?ver=3.0.3' type='text/css' media='all' />
 	<script src="//cdnjs.cloudflare.com/ajax/libs/timepicker/1.3.5/jquery.timepicker.min.js"></script>
 	<script>
 	
 	$( function() {
-		$( "button" ).button();
+		//$( "button" ).button();
 	
 		$('.timepicker').timepicker({
 			timeFormat: 'HH:mm',
@@ -30,6 +32,19 @@ require("language.php");
 		});
 		$('.timepicker').width("100px");
 		$(".timepicker").show();
+		$("#ShareDataHelp").click(function() {
+			$( "#dialog-confirm" ).dialog({
+				resizable: false,
+				width: "auto",
+				modal: true,
+				buttons: {
+					"OK": function() {
+					$( this ).dialog( "close" );
+					}
+				}
+				});
+		});
+
 		<?PHP
 		
 		$content = FALSE;
@@ -38,10 +53,13 @@ require("language.php");
 		
 		if ($content === FALSE)
 		{
+			// Default Values for fresh install
 			echo ("$('#radio_kw').prop('checked', true);\r\n");
 			echo ("$('#radio_celsius').prop('checked', true);\r\n");
 			echo ("$('#radio_km').prop('checked', true);\r\n");
-			echo ("$('#radio_en').prop('checked', true);\r\n");			
+			echo ("$('#radio_en').prop('checked', true);\r\n");		
+			echo ("$('#radio_all').prop('checked', true);\r\n");
+			echo ("$('#radio_Ideal').prop('checked', true);\r\n");
 		}
 		else
 		{
@@ -54,16 +72,34 @@ require("language.php");
 			$Length = $j->{"Length"};
 			$Language = $j->{"Language"};
 			$URL_Admin = $j->{"URL_Admin"};
+			$URL_Grafana = $j->{"URL_Grafana"};
+			$ZoomLevel = $j->{"ZoomLevel"};
+			
+			$HTTPPort = 5000;
+			if (property_exists($j,"HTTPPort"))
+				$HTTPPort = $j->{"HTTPPort"};
 
 			$ScanMyTesla = "false";
-			
 			if (property_exists($j,"ScanMyTesla"))
 				$ScanMyTesla = $j->{"ScanMyTesla"};
+	
+			$update = "all";
+			if (property_exists($j,"update"))
+				$update = $j->{"update"};
+
+			$Range = "IR";
+			if (property_exists($j,"Range"))
+				$Range = $j->{"Range"};
 			
 			echo ("$('.startdate').val('$start');\r\n");
 			echo ("$('.enddate').val('$end');\r\n");
 			echo ("$('#checkboxSleep')[0].checked = $enable;\r\n");
 			echo ("$('#checkboxScanMyTesla')[0].checked = $ScanMyTesla;\r\n");
+
+			if ($Range == "IR")
+				echo ("$('#radio_Ideal').prop('checked', true);\r\n");
+			else
+				echo ("$('#radio_Rated').prop('checked', true);\r\n");
 			
 			if ($power == "kw")
 				echo ("$('#radio_kw').prop('checked', true);\r\n");
@@ -82,6 +118,8 @@ require("language.php");
 				
 			if($Language =="en")
 				echo ("$('#radio_en').prop('checked', true);\r\n");
+			else if($Language =="nl")
+				echo ("$('#radio_nl').prop('checked', true);\r\n");
 			else if($Language =="no")
 				echo ("$('#radio_no').prop('checked', true);\r\n");
 			else
@@ -89,7 +127,28 @@ require("language.php");
 				
 			if (isset($URL_Admin))
 				echo ("$('#URL_Admin').val('$URL_Admin');\r\n");
+
+			if (isset($URL_Grafana))
+				echo ("$('#URL_Grafana').val('$URL_Grafana');\r\n");
 			
+			if (isset($HTTPPort))
+				echo ("$('#HTTPPort').val('$HTTPPort');\r\n");
+
+			if (isset($ZoomLevel))
+				echo ("$('#ZoomLevel').val('$ZoomLevel');\r\n");
+			
+			if (isShareData())
+				echo ("$('#checkboxSharedata')[0].checked = true;\r\n");
+			else
+				echo ("$('#checkboxSharedata')[0].checked = false;\r\n");
+
+			if ($update =="none")
+				echo ("$('#radio_none').prop('checked', true);\r\n");
+			else if ($update =="stable")
+				echo ("$('#radio_stable').prop('checked', true);\r\n");
+			else 
+				echo ("$('#radio_all').prop('checked', true);\r\n");
+
 		}
 		?>
 	});
@@ -106,7 +165,13 @@ require("language.php");
 		Length: $("input:radio[name ='Length']:checked").val(),
 		Language: $("input:radio[name ='Language']:checked").val(),
 		URL_Admin: $("#URL_Admin").val(),
+		URL_Grafana: $("#URL_Grafana").val(),
+		HTTPPort: $("#HTTPPort").val(),
+		ZoomLevel: $("#ZoomLevel").val(),
 		ScanMyTesla: $("#checkboxScanMyTesla").is(':checked'),
+		ShareData: $('#checkboxSharedata').is(':checked'),
+		update: $("input:radio[name ='update']:checked").val(),
+		Range: $("input:radio[name ='Range']:checked").val(),
 		}).always(function() {
 		alert("Saved!");
 		location.reload();
@@ -114,63 +179,93 @@ require("language.php");
   }
 
 </script>
-<button onclick="window.location.href='password.php';"><?php t("Zugangsdaten"); ?></button>
-<button onclick="window.location.href='restore.php';"><?php t("Restore DB"); ?></button>
-<h1>SETTINGS</h1>
+<body style="padding-top: 5px; padding-left: 10px;">
+<?php 
+include "menu.php";
+echo(menu("Settings"));
+?>
 <div>
 <table>
-<tr><td valign="top"><b><?php t("Language"); ?>:</b></td><td>
-<input id="radio_de" type="radio" value="de" name="Language" /> Deutsch<br>
-<input id="radio_en" type="radio" value="en" name="Language" /> English<br>
-<input id="radio_no" type="radio" value="no" name="Language" /> Norsk 
-</td></tr>
-<tr><td valign="top"><b><?php t("Leistung"); ?>:</b></td><td><input id="radio_hp" type="radio" value="hp" name="power" /> PS<br><input id="radio_kw" type="radio" value="kw" name="power" /> kW</td></tr>
-<tr><td valign="top"><b><?php t("Temperatur"); ?>:</b></td><td><input id="radio_celsius" type="radio" value="celsius" name="Temperature"> Celsius<br><input id="radio_fahrenheit" type="radio" value="fahrenheit" name="Temperature"> Fahrenheit </td></tr>
-<tr><td valign="top"><b><?php t("Längenmaß"); ?>:</b></td><td><input id="radio_km" type="radio" value="km" name="Length"> km<br><input id="radio_mile" type="radio" value="mile" name="Length"> mile </td></tr>
-<tr><td><b><?php t("Schlafen"); ?>:</b></td><td><input id="checkboxSleep" type="checkbox" value="sleep"> Enable</td></tr>
-<tr><td></td><td><input class="startdate timepicker text-center"></input> to <input class="enddate timepicker text-center"></input></td></tr>
-<tr><td valign="top"><b><?php t("URL Admin Panel"); ?>:</b></td><td><input id="URL_Admin" style="width:100%;" placeholder="http://raspberry/admin/"></td></tr>
-<tr><td><b><?php t("ScanMyTesla integration"); ?>:</b></td><td><input id="checkboxScanMyTesla" type="checkbox" value="ScanMyTesla"> Enable</td><td><a href="https://teslalogger.de/smt.php" target=”_blank”><img src="img/icon-help-24.png" /></a></td></tr>
-<tr><td><b><?php t("ScanMyTesla last received"); ?>:</b></td><td>
+<tr><td><h1 style="margin-top:0px;"><?php t("Zugangsdaten"); ?></h1></td><td></td></tr>
+<tr><td></td><td><button onclick="window.location.href='password.php';"  style="float: right;"><?php t("Zugangsdaten"); ?></button></td></tr>
+<tr><td><h1>SETTINGS</h1></td><td></td></tr>
+	<tr><td valign="top"><b><?php t("Language"); ?>:</b></td><td>
+		<input id="radio_de" type="radio" value="de" name="Language" /> Deutsch<br>
+		<input id="radio_en" type="radio" value="en" name="Language" /> English<br>
+		<input id="radio_nl" type="radio" value="nl" name="Language" /> Nederlands<br>
+		<input id="radio_no" type="radio" value="no" name="Language" /> Norsk
+	</td></tr>
+	<tr><td valign="top"><b><?php t("Leistung"); ?>:</b></td><td><input id="radio_hp" type="radio" value="hp" name="power" /> PS<br><input id="radio_kw" type="radio" value="kw" name="power" /> kW</td></tr>
+	<tr><td valign="top"><b><?php t("Temperatur"); ?>:</b></td><td><input id="radio_celsius" type="radio" value="celsius" name="Temperature"> Celsius<br><input id="radio_fahrenheit" type="radio" value="fahrenheit" name="Temperature"> Fahrenheit </td></tr>
+	<tr><td valign="top"><b><?php t("Längenmaß"); ?>:</b></td><td><input id="radio_km" type="radio" value="km" name="Length"> km<br><input id="radio_mile" type="radio" value="mile" name="Length"> mile </td></tr>
+	<tr><td valign="top"><b><?php t("Reichweite"); ?>:</b></td><td><input id="radio_Ideal" type="radio" value="IR" name="Range"> Ideal<br><input id="radio_Rated" type="radio" value="RR" name="Range"> Rated</td></tr>
+	<tr><td><b><?php t("Daten anonym teilen"); ?>:</b></td><td><input id="checkboxSharedata" type="checkbox" value="sharedata"> Enable</td><td><img id="ShareDataHelp" src="img/icon-help-24.png" /></td></tr>
+	<tr><td valign="top"><b><?php t("Automatische Updates"); ?>:</b></td><td><input id="radio_all" type="radio" value="all" name="update"> All<br><input id="radio_stable" type="radio" value="stable" name="update"> Stable<br><input id="radio_none" type="radio" value="none" name="update"> None</td></tr>
+	<tr><td><b><?php t("Schlafen"); ?>:</b></td><td><input id="checkboxSleep" type="checkbox" value="sleep"> Enable</td></tr>
+	<tr><td></td><td><input class="startdate timepicker text-center"></input> to <input class="enddate timepicker text-center"></input></td></tr>
+	<tr><td valign="top"><b><?php t("URL Admin Panel"); ?>:</b></td><td><input id="URL_Admin" style="width:100%;" placeholder="http://raspberry/admin/"></td></tr>
+	<tr><td valign="top"><b><?php t("URL Grafana"); ?>:</b></td><td><input id="URL_Grafana" style="width:100%;" placeholder="http://raspberry:3000/"></td></tr>
+	<tr><td valign="top"><b><?php t("TeslaLogger HTTP Port"); ?>:</b></td><td><input id="HTTPPort" style="width:100%;" placeholder="5000"></td></tr>
+	<tr><td valign="top"><b><?php t("Zoom Level"); ?>:</b></td><td><input id="ZoomLevel" size="4"></td></tr>
+	<tr><td><b><?php t("ScanMyTesla integration"); ?>:</b></td><td><input id="checkboxScanMyTesla" type="checkbox" value="ScanMyTesla"> Enable</td><td><a href="https://teslalogger.de/smt.php" target=”_blank”><img src="img/icon-help-24.png" /></a></td></tr>
+	
+	
+	
+	
 <?php
-if (file_exists("/etc/teslalogger/LASTSCANMYTESLA"))
-{
-	$taskertoken = file_get_contents("/etc/teslalogger/LASTSCANMYTESLA");
-	echo $taskertoken;
-}
-else
-{
-	echo "-";
-}
+
+$url = GetTeslaloggerURL("getallcars");
+
+	$allcars = @file_get_contents($url);
+	if ($allcars === false)
+    {
+        $error = error_get_last();
+        $error = explode(': ', $error['message']);
+        $error = trim($error[2]);
+		echo("<h1>errortext = 'Error: $error - URL: $url'</h1>");
+		return;
+    }
+	
+	$jcars = json_decode($allcars);
+
+	//var_dump($jcars);
+	
+	foreach ($jcars as $k => $v) {
+		$displayname = $v->{"display_name"};
+		$taskertoken = $v->{"tasker_hash"};    
+		
+		$lastscanmytesla = JSONDatetoString($v->{"lastscanmytesla"});
+	
+	if ($taskertoken == null)
+		continue;
 ?>
-</td></tr>
-<tr><td valign="top"><b>Tasker Token:</b></td><td>
-<?php
-$taskertoken = "";
-if (file_exists("/etc/teslalogger/TASKERTOKEN"))
-{
-	$taskertoken = file_get_contents("/etc/teslalogger/TASKERTOKEN");
-	echo $taskertoken;
-}
-else
-{
-	echo (t("Check your Tesla Credentials!"));
-}
-?>
-</tr>
-<tr><td valign="top"><b>Tasker URL:</b></td><td>
+
+<tr><td>&nbsp;</td><td></td></tr>
+<tr><td><b>Car Name:</b></td><td><?= $displayname ?></td></tr>
+<tr><td style="padding-left:20px;"><b><?php t("ScanMyTesla last received"); ?>:</b></td><td><?= $lastscanmytesla ?></td></tr>
+<tr><td style="padding-left:20px;"valign="top"><b>Tasker Token:</b></td><td><?= $taskertoken ?></td></tr>
+<tr><td style="padding-left:20px;"valign="top"><b>Tasker URL:</b></td><td>
 <?php
 if (strlen($taskertoken) > 7)
 	echo "https://teslalogger.de/wakeup.php?t=".$taskertoken;
 ?>
 </td></td><td><a href="https://teslalogger.de/faq-1.php" target=”_blank”><img src="img/icon-help-24.png" /></a></td></tr>
-<tr><td valign="top"><b>Received Tasker Token:</b></td><td>
+<tr><td style="padding-left:20px;" valign="top"><b>Received Tasker Token:</b></td><td>
 <?php
 if (strlen($taskertoken) > 7)
 	echo file_get_contents("http://teslalogger.de/tasker_date.php?t=".$taskertoken);
 ?>
 </td></tr>
+
+<?php
+}
+
+?>
 <tr><td></td><td>&nbsp;</td></tr>
 <tr><td></td><td><button onclick="save();" style="float: right;">Save</button></td></tr>
 </table>
+</div>
+
+<div id="dialog-confirm" title="Info" style="display:none;">
+<?php t("TextShare"); ?>
 </div>

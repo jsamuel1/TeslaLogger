@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using TeslaLogger;
@@ -64,13 +65,25 @@ namespace MQTTClient
                         client.Connect(clientid);
                     }
 
-                    string temp = System.IO.File.ReadAllText("/etc/teslalogger/current_json.txt");
+                    // string temp = System.IO.File.ReadAllText("/etc/teslalogger/current_json_1.txt");
+                    string temp = null;
+                    using (WebClient wc = new WebClient())
+                    {
+                        temp = wc.DownloadString("http://localhost:5000/currentjson/1");
+                    }
+
                     if (temp != lastjson)
                     {
                         lastjson = temp;
                         client.Publish(Properties.Settings.Default.Topic, Encoding.UTF8.GetBytes(lastjson), 
                             uPLibrary.Networking.M2Mqtt.Messages.MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, true);
                     }
+                }
+                catch (WebException wex)
+                {
+                    Logfile.Log(wex.Message);
+                    System.Threading.Thread.Sleep(60000);
+
                 }
                 catch (Exception ex)
                 {

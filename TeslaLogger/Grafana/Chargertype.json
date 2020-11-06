@@ -15,11 +15,21 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 41,
-  "links": [],
+  "links": [
+    {
+      "icon": "external link",
+      "includeVars": true,
+      "tags": [],
+      "title": "Admin Panel",
+      "tooltip": "",
+      "type": "link",
+      "url": "http://raspberry/admin/"
+    }
+  ],
   "panels": [
     {
       "columns": [],
+      "datasource": "teslalogger",
       "fontSize": "100%",
       "gridPos": {
         "h": 21,
@@ -141,5 +151,5 @@
   "timezone": "",
   "title": "Chargertype",
   "uid": "AZFoEdmRk",
-  "version": 3
+  "version": 8
 }

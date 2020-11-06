@@ -1,5 +1,7 @@
-# Docker Setup (BETA)
+# Docker Setup
 For Synology NAS users, check the hints here: [LINK](docker_setup_synology.md) 
+
+Docker on Raspberry: It won't work if you don't have a 64bit OS as MariaDB requires a 64bit OS!
 
 Please make sure you have the latest docker and docker-compse. Many repositories comes with old docker and / or docker-compose. You can avoid a lot of problems by doblecheck it.
 
@@ -41,7 +43,7 @@ The config file could look like this:
               <value>123456</value>
             </setting>
             <setting name="DBConnectionstring" serializeAs="String">
-                <value>Server=database;Database=teslalogger;Uid=root;Password=teslalogger;</value>
+                <value>Server=database;Database=teslalogger;Uid=root;Password=teslalogger;CharSet=utf8;</value>
             </setting>
             <setting name="Car" serializeAs="String">
                 <value>0</value>
@@ -52,10 +54,10 @@ The config file could look like this:
 6. fire up docker containers. Make sure, you got the latest docker & docker-compose version. Many repositories comes with very old versions!
 ```
 docker-compose build
-docker-compose up
+docker-compose up -d
 ```
 
-after a minute or two, everything should be ready.
+after a minute or two, everything should be ready. On some slow machines or NAS, that could take more than 10 Minutes. Especially the database may take longer, so don't give up, if Teslalogger can't connect to the DB at the first startup. 
 
 Try to connect to Grafana with you favorite browser:
 http://localhost:3000 (admin/teslalogger)
@@ -73,5 +75,5 @@ git fetch
 git reset --hard origin/master
 git checkout origin/master -- docker-compose.yml
 docker-compose build
-docker-compose up
+docker-compose up -d
 ```
